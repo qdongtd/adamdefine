@@ -1,0 +1,12 @@
+__pycache__/
+*.pyc
+.DS_Store
+Thumbs.db
+
+# never commit study data / submission artifacts
+*.xlsx
+*.xpt
+*.sas7bdat
+*.pdf
+*.docx
+*.zip
