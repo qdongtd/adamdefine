@@ -38,6 +38,27 @@ Description names the copied variable as `DATASET.VARIABLE` (P21 checks the synt
 
 ## Codelists
 
+**Terminology standard per codelist.** An NCI-coded codelist must name the CT
+package that actually contains its code: ADaM CT codelists (e.g. DATEFL C81223,
+DTYPE C81224, SBJTSTAT C124296 used for EOSSTT/EOTSTT/EOPxxSTT, PARAMTYP C81225,
+TIMEFL C81226, POOLINT C165644) take `ADaM <version>`; everything else `SDTM
+<version>`. Tagging an ADaM CT codelist as SDTM makes P21 report DD0129 ("Missing
+required Alias") because the code is not in that package. `fill_adam_define.py`
+carries the ADaM CT code list (NCI EVS ADaM Terminology 2026-09-25) - update it
+with new CT releases.
+
+**Only referenced Methods/Comments.** After the value-level-only convention clears a
+Variables row, its Method/Comment must leave the Methods/Comments tabs too, or P21
+reports DD0080/DD0079. The fill drops unreferenced IDs; self-QC checks both.
+
+**Predecessor source search.** When the main spec text is prose, look through the
+other spec text fields (`[r_def]`, `[r_prog]`, Conversion Definition, Programming
+Notes) for a plain `DATASET.VARIABLE`, ignoring librefs (`SDTM.CO` is a dataset
+reference). A Predecessor with no source variable anywhere (P21 DD0061) is a spec
+issue: report it; the spec owner either names the source variable or changes the
+origin to Derived with the text as the Method.
+
+
 Lessons from ADaM define reviews: derive codelist terms and coded/decoded pairs from
 the real ADaM data, not the spec — numeric codes are not always 1..n (e.g. RACEN 1
 and 5), TRTPN/TRTAN codings can differ between datasets, and a spec codelist can

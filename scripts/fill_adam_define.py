@@ -31,6 +31,12 @@ ap.add_argument('--nodata-text', default='Planned for collection but no data wer
 args = ap.parse_args()
 
 ORG = PatternFill(start_color='FFC000', end_color='FFC000', fill_type='solid'); NOFILL = PatternFill(fill_type=None)
+# CDISC ADaM Controlled Terminology codelist C-codes (NCI EVS ADaM Terminology, 2026-09-25 release).
+# A codelist with one of these codes belongs to ADaM CT; any other NCI-coded codelist to SDTM CT.
+# Using the wrong standard makes P21 report DD0129 (it cannot find the code). Update with new CT releases.
+ADAM_CT_CODES = {'C208382', 'C208381', 'C204411', 'C187458', 'C187457', 'C81223', 'C81224', 'C172334', 'C172335',
+                 'C158114', 'C158115', 'C187456', 'C187455', 'C204410', 'C193278', 'C193277', 'C81225', 'C165644',
+                 'C124296', 'C225073', 'C225072', 'C81226', 'C204414', 'C204413', 'C204412', 'C228401', 'C228402'}
 ADAM_ORIGINS = {'Derived', 'Assigned', 'Predecessor'}
 ADAM_CLASSES = {'SUBJECT LEVEL ANALYSIS DATASET', 'BASIC DATA STRUCTURE', 'OCCURRENCE DATA STRUCTURE', 'ADAM OTHER'}
 DATE = {'date', 'datetime', 'time', 'partialDate', 'partialTime', 'partialDatetime', 'incompleteDatetime',
@@ -106,6 +112,7 @@ def text_of(d):
 PRED_RE = re.compile(r'^\s*(?:set\s+(?:to|equal\s+to)\s+)?([A-Z][A-Z0-9]{1,7})\.([A-Z][A-Z0-9]{1,7})\s*\.?\s*$', re.I)
 PRED_LEAD = re.compile(r'^\s*(?:set\s+(?:to|equal\s+to)\s+)?([A-Z][A-Z0-9]{1,7})\.([A-Z][A-Z0-9]{1,7})(.*)$', re.I | re.S)
 DSVAR = re.compile(r'(?<![A-Za-z0-9_])([A-Z][A-Z0-9]{1,7})\.([A-Z][A-Z0-9]{1,7})(?![A-Za-z0-9_])')
+LIBREFS = {'SDTM', 'ADAM', 'RAW', 'LOOKUP', 'WORK', 'LIBRARY'}   # SDTM.CO is a dataset reference, not DATASET.VARIABLE
 def pred_of(t):
     m = PRED_RE.match(t or ''); return ('%s.%s' % (m.group(1).upper(), m.group(2).upper())) if m else ''
 def pred_parse(t):
@@ -118,7 +125,7 @@ def pred_parse(t):
         if re.match(r'^where\s+\S', rest, re.I) and chr(10) not in rest:   # SUPPxx.QVAL where QNAM="X"
             return '%s %s' % (dv, rest), True
         return dv, False
-    found = sorted({'%s.%s' % (a.upper(), b.upper()) for a, b in DSVAR.findall(t)})
+    found = sorted({'%s.%s' % (a.upper(), b.upper()) for a, b in DSVAR.findall(t) if a.upper() not in LIBREFS})
     return (found[0], False) if len(found) == 1 else ('', False)
 def map_origin(o):
     return {'derived': 'Derived', 'assigned': 'Assigned', 'predecessor': 'Predecessor'}.get(norm(o), txt(o))
@@ -137,7 +144,7 @@ def setv(ws, ci, row, col, val, p21=None):
     c = ws.cell(row, ci[col] + 1); c.value = val if val else None
     if p21 is not None and txt(p21) != txt(val): red(c)
 
-def apply(ws, ci, rr, ds, var, origin, text, src, idb, p21o, p21pred, label):
+def apply(ws, ci, rr, ds, var, origin, text, src, idb, p21o, p21pred, label, alts=()):
     """Write Origin/Source/Predecessor/Method/Comment for one row from (origin, text)."""
     pr = []
     if origin and origin not in ADAM_ORIGINS:
@@ -161,6 +168,12 @@ def apply(ws, ci, rr, ds, var, origin, text, src, idb, p21o, p21pred, label):
     if origin == 'Predecessor':
         if 'Source' in ci: ws.cell(rr, ci['Source'] + 1).value = None
         pv, clean = pred_parse(text)
+        if not clean:   # another spec text field may hold the plain copy (e.g. Programming Notes 'EX.EXDOSE')
+            for alt in alts:
+                apv, aclean = pred_parse(alt)
+                if aclean:
+                    pr.append('Predecessor %s taken from another spec column (main text: "%s")' % (apv, text[:100])); pv, clean = apv, True; break
+                if apv and not pv: pv = apv
         if text.strip().upper() in ('ADSL', 'ADSL.<CORE VARIABLE>'): pv, clean = 'ADSL.%s' % var, True
         if pv and not clean:
             ws.cell(rr, ci['Predecessor'] + 1).fill = ORG
@@ -210,7 +223,8 @@ for rr in range(2, V.max_row + 1):
     else:
         if not d['study']: pr.append('Variable not marked for %s in spec (present in data)' % STUDY)
         origin = map_origin(d['r_orig'] or d['origin']); text, src = text_of(d)
-    pr += apply(V, vci, rr, ds, var, origin, text, src, '%s.%s' % (ds, var), p21o, p21pred, '')
+    alts = [d[k] for k in ('r_def', 'r_prog', 'conv', 'notes') if d and d.get(k)] if d else []
+    pr += apply(V, vci, rr, ds, var, origin, text, src, '%s.%s' % (ds, var), p21o, p21pred, '', alts)
     if txt(V.cell(rr, vci['Has No Data'] + 1).value) == 'Yes' and 'Comment' in vci and not txt(V.cell(rr, vci['Comment'] + 1).value):
         comments['COM.NODATA'] = COMMON['COM.NODATA']; V.cell(rr, vci['Comment'] + 1).value = 'COM.NODATA'
     put_pr(V, vci, rr, pr)
@@ -269,7 +283,9 @@ for rr in range(2, VL.max_row + 1):
         pr.append('No VLM row for this value - parent %s.%s spec row used' % (ds, var))
         if not text: VL.cell(rr, lci['Origin'] + 1).fill = ORG
         inherited[(ds, var)].append(re.sub(r'^\S+\s+EQ\s+', '', wc))
-    pr += apply(VL, lci, rr, ds, var, origin, text, src, '%s.%s.%s' % (ds, var, wid), p21o, p21pred, wc)
+    srcd = m or parent or {}
+    alts = [srcd[k] for k in ('r_def', 'r_prog', 'conv', 'notes') if srcd.get(k)]
+    pr += apply(VL, lci, rr, ds, var, origin, text, src, '%s.%s.%s' % (ds, var, wid), p21o, p21pred, wc, alts)
     put_pr(VL, lci, rr, pr)
 for (ds, var), vals in sorted(inherited.items()):
     issue('ValueLevel', ds, var, '%d values' % len(vals), 'No VLM row for these values - parent variable spec row used (review that the parent text fits each value)',
@@ -339,7 +355,8 @@ for rr in range(2, CL.max_row + 1):
     i = txt(CL.cell(rr, 1).value)
     if not i: continue
     if CTVER and txt(CL.cell(rr, cli['NCI Codelist Code'] + 1).value) and not txt(CL.cell(rr, cli['Terminology'] + 1).value):
-        CL.cell(rr, cli['Terminology'] + 1).value = 'SDTM ' + CTVER
+        code = txt(CL.cell(rr, cli['NCI Codelist Code'] + 1).value)
+        CL.cell(rr, cli['Terminology'] + 1).value = ('ADaM ' if code in ADAM_CT_CODES else 'SDTM ') + CTVER
     if dup[names[i]] > 1:
         m2 = re.match(r'([A-Z][A-Z0-9]{1,7})\.([A-Z][A-Z0-9]{1,7})\.', i)
         tagd = ('%s.%s' % (m2.group(2), m2.group(1))) if m2 else (next(iter(users[i])) if len(users[i]) == 1 else i)
@@ -360,7 +377,14 @@ for rr in range(2, D.max_row + 1):
         D.cell(rr, dci['Class'] + 1).fill = ORG
         issue('Datasets', ds, '', '', 'Class BASIC DATA STRUCTURE but dataset has no PARAMCD/PARAM - check Content-tab class', txt(D.cell(rr, dci['Class'] + 1).value), '', '')
 
-# ---------------- Methods / Comments ----------------
+# ---------------- Methods / Comments (only referenced IDs: DD0079 / DD0080) ----------------
+_ref = set()
+for ws_, ci_ in ((V, vci), (VL, lci)):
+    for r_ in ws_.iter_rows(min_row=2, values_only=True):
+        _ref |= {txt(r_[ci_[c]]) for c in ('Method', 'Comment') if c in ci_ and txt(r_[ci_[c]])}
+_ref |= {txt(r_[dci['Comment']]) for r_ in D.iter_rows(min_row=2, values_only=True) if 'Comment' in dci and txt(r_[dci['Comment']])}
+for store in (methods, comments):
+    for i in [i for i in store if i not in _ref]: del store[i]; log['unreferenced method/comment dropped'] += 1
 M = wb['Methods']; mci = {c.value: i for i, c in enumerate(M[1])}
 for mid in sorted(methods):
     r = [None] * len(mci); r[mci['ID']] = mid; r[mci['Name']] = mid; r[mci['Type']] = 'Computation'; r[mci['Description']] = methods[mid]; M.append(r)

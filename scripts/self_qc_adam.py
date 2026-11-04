@@ -87,6 +87,22 @@ used = {r[vi['Codelist']] for r in vr if r[vi['Codelist']]} | {r[li['Codelist']]
 dicts = {r[0] for r in wb['Dictionaries'].iter_rows(min_row=2, values_only=True) if r and r[0]} if 'Dictionaries' in wb.sheetnames else set()
 chk('Referenced codelist missing', sorted(c for c in used if c not in names and c not in dicts))
 
+# ---- DD0079 / DD0080: every Comment / Method must be referenced
+refM = {txt(r[vi['Method']]) for r in vr} | {txt(r[li['Method']]) for r in lr}
+refC = {txt(r[vi['Comment']]) for r in vr} | {txt(r[li['Comment']]) for r in lr} | {txt(r[di['Comment']]) for r in dr if 'Comment' in di}
+chk('DD0080 Method not referenced', sorted(k for k in M if k not in refM))
+chk('DD0079 Comment not referenced', sorted(k for k in C if k not in refC))
+# ---- DD0129-style: Terminology standard must hold the codelist code (ADaM CT vs SDTM CT)
+ADAM_CT = {'C208382', 'C208381', 'C204411', 'C187458', 'C187457', 'C81223', 'C81224', 'C172334', 'C172335', 'C158114',
+           'C158115', 'C187456', 'C187455', 'C204410', 'C193278', 'C193277', 'C81225', 'C165644', 'C124296', 'C225073',
+           'C225072', 'C81226', 'C204414', 'C204413', 'C204412', 'C228401', 'C228402'}   # ADaM CT 2026-09-25
+term = {}
+for r in clr:
+    if r[cli['ID']] and r[cli['ID']] not in term: term[r[cli['ID']]] = (txt(r[cli['NCI Codelist Code']]), txt(r[cli['Terminology']]))
+chk('Codelist Terminology ADaM vs SDTM CT', ['%s %s:%s' % (i, c, t) for i, (c, t) in term.items()
+    if c and t and ((c in ADAM_CT) != t.upper().startswith('ADAM'))])
+chk('Terminology set but no NCI code (DD0129)', [i for i, (c, t) in term.items() if t and not c])
+
 viol = sorted(k for k in res if res[k]); clean = sorted(k for k in res if not res[k])
 print('=== ADaM self-QC pre-check: %s ===' % F)
 print('rules run: %d | clean: %d | with findings: %d   (PRE-FILTER ONLY - still run P21)' % (len(res), len(clean), len(viol)))
