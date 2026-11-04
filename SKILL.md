@@ -112,6 +112,35 @@ ADEG AVAL/AVALC). Checked by `self_qc_adam.py`.
 - Codelist terms: derive from the ADaM data when available (`pyreadstat`,
   `disable_datetime_conversion=True`), never from a spec's 1..n assumption.
 
+## Editing a workbook the user has saved in Excel
+
+A define spec the user has opened and saved in Excel can carry a stylesheet that
+openpyxl corrupts on resave (the saved file no longer re-opens:
+`IndexError` in `_expand_named_style`). Always re-open after saving; if it fails,
+**restore the backup** and apply the edits through Excel itself (a VBScript run with
+`cscript //nologo`: `Workbooks.Open`, `Cells(r,c).ClearContents` / `.Value`,
+`Rows(r).Delete` bottom-up, `Save`). Plan the edits with openpyxl read-only first,
+then verify with a before/after diff that nothing else moved.
+
+## P21 data-validation triage (ADaM)
+
+Classify each open issue: **define metadata** (fix in the workbook), **data** (ADaM
+programming punch list), **key variables / data** (spec owner decides), **package**
+(files in the zip). Common ones:
+- **SD1228** value not in a user-defined codelist (value-level AVALC codelists built
+  from another data cut): remove the value-level codelist (unlink + delete when no
+  longer referenced) or rebuild it from the current data - ask which.
+- **SD1152** duplicate records per Key Variables: show the duplicated key values; null
+  key values are a data issue, a key that cannot separate records needs another key
+  variable (e.g. a --SEQ) - do not change keys without the spec owner.
+- **DD0040** missing Key Variables: often a space-separated key - make it
+  comma-separated (same variables).
+- **DD0084 / DD0085**: referenced document (ADRG PDF) / define2-1-0.xsl missing from
+  the package.
+- Removing a dataset: delete its Datasets/Variables/ValueLevel rows, then any
+  Method/Comment/Codelist no longer referenced anywhere.
+Write the triage (issue, source, resolution, P21 evidence) to a workbook.
+
 ## Self-QC
 
 `self_qc_adam.py` is a pre-filter (still run P21): ADaM origin set; Derived needs

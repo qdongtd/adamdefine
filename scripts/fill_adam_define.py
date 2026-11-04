@@ -320,7 +320,8 @@ for rr in range(2, D.max_row + 1):
     if cr:
         m = re.search(r'\[r_sort\]\s*(.+)$', txt(cr[cst]), re.S)
         want = {'Class': txt(cr[ch['class']]).upper(), 'Structure': txt(cr[ch['structure']]),
-                'Key Variables': (m.group(1) if m else txt(cr[ch['sortorder']])).strip()}
+                'Key Variables': ', '.join(t for t in re.split(r'[\s,]+', (m.group(1) if m else txt(cr[ch['sortorder']])).strip()) if t)}
+        # Key Variables must be a comma-separated list (P21 DD0040 reads 'A B C' as one missing value)
         for col, v in want.items():
             c = D.cell(rr, dci[col] + 1); cur = txt(c.value)
             if not v or re.sub(r'\s+', ' ', v).upper() == re.sub(r'\s+', ' ', cur).upper(): continue

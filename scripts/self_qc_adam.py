@@ -37,6 +37,11 @@ chk('ADaM Class valid', ['%s:%s' % (r[di['Dataset']], r[di['Class']]) for r in d
 chk('Structure required', [r[di['Dataset']] for r in dr if not txt(r[di['Structure']])])
 chk('Key Variables required', [r[di['Dataset']] for r in dr if not txt(r[di['Key Variables']])])
 if 'Standard' in di: chk('Standard column filled', [r[di['Dataset']] for r in dr if not txt(r[di['Standard']])])
+dsvars = defaultdict(set)
+for r in vr: dsvars[r[vi['Dataset']]].add(r[vi['Variable']])
+chk('Key Variables comma-separated and in dataset (DD0040)', ['%s: %s' % (r[di['Dataset']], txt(r[di['Key Variables']])) for r in dr
+    if txt(r[di['Key Variables']]) and (re.search(r'[A-Z0-9]\s+[A-Z]', txt(r[di['Key Variables']]).replace(',', ' ,'))
+    and ',' not in txt(r[di['Key Variables']]) or any(k.strip() and k.strip() not in dsvars[r[di['Dataset']]] for k in txt(r[di['Key Variables']]).split(',')))])
 chk('ADSL present', [] if any(r[di['Dataset']] == 'ADSL' for r in dr) else ['ADSL missing'])
 
 # ---- Variables + ValueLevel origin rules
