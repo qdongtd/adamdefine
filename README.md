@@ -1,3 +1,5 @@
+> **Retired (2026-11-10).** This skill has been merged into **cdisc-define-xml** (one skill for SDTM and ADaM Define-XML specs): https://github.com/qdongtd/cdiscdefine . Org plugin: `cdisc-define`. This repo is kept for history and no longer receives updates.
+
 # adam-define-xml
 
 A Claude Code skill for drafting and QC-ing a CDISC **ADaM Define-XML 2.1**
